@@ -26,18 +26,26 @@
 #define BUFFER_SIZE	3100
 #define	TIMEOUT		5000
 
+//生成多项式G！！！
+int G[] = {1,1,0,1};
+int lenG = 4;
+int R[];
+int lenR = lenG - 1;
+int RR[];
+int lenRR = lenG - 1;
+
 CFile		SendFile,RecvFile;	//发送和接收文件
 
 HANDLE		m_hCommPort;		//保存打开的串行口设备句柄
-char		RecvBuf[BUFFER_SIZE], SendBuf[BUFFER_SIZE];
-UINT		SendLen,RecvPTR;
+char		RecvBuf[BUFFER_SIZE], SendBuf[BUFFER_SIZE]; //reveiver缓存 sender缓存！！！
+UINT		SendLen,RecvPTR; //发送长度 接收指针！！！
 
-UINT		CommState;	//保存通信状态：IdleState、SendState和RecvState
+UINT		CommState;	//保存通信状态：IdleState、SendState和RecvState三个宏定义！！！
 BYTE		CRC;		//保存校验和
 BYTE		Sequence;	//在等停协议中仅使用0和1
-bool		ACKFlag;	//接收到ACK：true
+bool		ACKFlag;	//接收到ACK：true ！！！
 bool		LastPacket;	//是否最后一包
-UINT		STXFlag;	//0：没收到STX；1：收到STX但未收到序列号；2：收到STX而且收到序列号
+UINT		STXFlag;	//0：没收到STX；1：收到STX但未收到序列号；2：收到STX而且收到序列号 ！！！
 UINT_PTR	m_nTimer;	//定时器
 UINT		SendCount;	//重发计数器
 time_t		TimeStart,TimeFinish;
@@ -156,7 +164,7 @@ HCURSOR CStopWaitCommDlg::OnQueryDragIcon()
 	return static_cast<HCURSOR>(m_hIcon);
 }
 
-void CStopWaitCommDlg::OnBnClickedOk()
+void CStopWaitCommDlg::OnBnClickedOk() //发送按钮点击事件！！！
 {
 	// TODO: 在此添加控件通知处理程序代码
 
@@ -170,15 +178,15 @@ void CStopWaitCommDlg::OnBnClickedOk()
 		MessageBox("发送文件打开错误！");
 		return;
 	}
-	//进入发送状态
+	//进入发送状态！！！
 	m_Send.EnableWindow(false);
 	m_Setup.EnableWindow(false);
 
-	m_ListLog.InsertString(-1,"------进入发送状态------");
+	m_ListLog.InsertString(-1,"------进入发送状态？？------");
 	time(&TimeStart);	//开始计时
 	CommState=SENDSTATE;ACKFlag=false;Sequence=0;LastPacket=false;SendCount=0;TextLen=0;
-	SendBuf[0]=ENQ;SendLen=1;	//通知接收方开始发送
-	SendMsg("发送：ENQ");
+	SendBuf[0]=ENQ;SendLen=1;	//通知接收方开始发送 ENQ询问！！！
+	SendMsg("发送？？：ENQ");
 	m_nTimer=SetTimer(1,TIMEOUT,NULL);	//设置定时器
 }
 
@@ -190,25 +198,35 @@ UINT ReadChar(PVOID hWnd)
 	ULONG		ReadLen;
 	double		DiffTime,Ratio;
 
+	int len, i, j;
+	int st;
+	int ed;//end是最后移位所在下标
+	int lenMM = 0;
+	int MM[100000];
+	int lenQQ = 4;
+	int QQ[10];
+	int fflag = 1;
+	int bbit[10];
+
 	memset(&RecvOV,0,sizeof(RecvOV));	//初始化Overlapped变量
 	RecvOV.hEvent=RecvEvent;
 
-	while (true)		//只要线程运行，就监视端口是否收到数据
+	while (true)		//只要线程运行，就监视端口是否收到数据！！！
 	{
 		if (CommState==RECVSTATE)	m_nTimer=pDlg->SetTimer(1,3*TIMEOUT,NULL);	//设置定时器
 
-		ReadFile(m_hCommPort,&RecvBuf[RecvPTR],1,&ReadLen,&RecvOV); //读字符
+		ReadFile(m_hCommPort,&RecvBuf[RecvPTR],1,&ReadLen,&RecvOV); //读字符 读到RecvBuf里！！！
 		GetOverlappedResult(m_hCommPort,&RecvOV,&ReadLen,TRUE);		//等待读状态完成
 		RecvEvent.ResetEvent();		//复位事件变量
 
-		if (ReadLen>0)
+		if (ReadLen>0)//非空
 		{
-			switch (CommState)
+			switch (CommState)//3中通信状态！！！
 			{
-			case IDLESTATE:
-				if (RecvBuf[RecvPTR]==ENQ)	//收到ENQ，进入接收状态
+			case IDLESTATE://空闲状态！！！
+				if (RecvBuf[RecvPTR]==ENQ)	//收到ENQ，进入接收状态！！！
 				{
-					pDlg->m_ListLog.InsertString(-1,"------进入接收状态------");
+					pDlg->m_ListLog.InsertString(-1,"------进入接收状态？？------");
 					pDlg->m_ListLog.InsertString(-1,"接收：ENQ");
 					if ( !RecvFile.Open("receive.txt",CFile::modeCreate|CFile::modeWrite|CFile::typeBinary,NULL))	//打开文件
 					{
@@ -220,28 +238,28 @@ UINT ReadChar(PVOID hWnd)
 					pDlg->m_Setup.EnableWindow(false);
 					CommState=RECVSTATE;Sequence=0;RecvPTR=0;STXFlag=0;TextLen=0;	//进入接收状态
 					time(&TimeStart);
-					SendBuf[0]=ACK; SendBuf[1]=Sequence; SendLen=2;	//发送确认信息
-					SendMsg("发送：ACK 0");
+					SendBuf[0]=ACK; SendBuf[1]=Sequence; SendLen=2;	//发送确认信息 组帧ACK！！！
+					SendMsg("发送？？：ACK 0");
 				}
 				break;
-			case SENDSTATE:
-				if (ACKFlag==true)
+			case SENDSTATE://发送状态！！！
+				if (ACKFlag==true)//收到ACK-》发下一个包！！！
 				{
-					if (RecvBuf[RecvPTR]==Sequence)
+					if (RecvBuf[RecvPTR]==Sequence)//已发包序号与ACK序号匹配！！！
 					{
 						sprintf(DisplayStr,"接收：ACK %i",Sequence);pDlg->m_ListLog.InsertString(-1,DisplayStr);
 						SendCount=0;
-						pDlg->KillTimer(m_nTimer);
-						if (LastPacket==true)	//是否最后一包
+						pDlg->KillTimer(m_nTimer);//关掉计时器！！！
+						if (LastPacket==true)//是否最后一包！！！
 						{
-							CommState=IDLESTATE;
-							SendFile.Close();	//最后一包，关闭文件
+							CommState=IDLESTATE;//回到空闲状态！！！
+							SendFile.Close();	//最后一包，关闭文件！！！
 
-							SendBuf[0]=EOT;SendBuf[1]=EOT;SendLen=2;	//通知接收方开始发送
-							SendMsg("发送：EOT");
+							SendBuf[0]=EOT;SendBuf[1]=EOT;SendLen=2;	//发送EOTEOT 通知接收方开始发送！！！
+							SendMsg("发送？？：EOT");
 							pDlg->m_ListLog.InsertString(-1,"------返回空闲状态------");
 						
-							time(&TimeFinish);	//显示统计信息
+							time(&TimeFinish);	//显示统计信息！！！
 							DiffTime=difftime(TimeFinish,TimeStart);
 							if ((ULONG (DiffTime))==0) sprintf(tempStr,"xxxxxx");	//该程序只能精确到秒
 							else
@@ -257,33 +275,33 @@ UINT ReadChar(PVOID hWnd)
 							pDlg->m_Send.EnableWindow(true);
 							pDlg->m_Setup.EnableWindow(true);
 						}
-						else
+						else//包没发完 发送下一包！！！
 						{
-							FormPacket();
+							FormPacket();//组帧！！！
 							SendMsg("发送：信息......");
-							Sequence = (Sequence==0) ? 1:0;	//变换Sequence.
-							m_nTimer=pDlg->SetTimer(1,TIMEOUT,0);	//设置定时器
+							Sequence = (Sequence==0) ? 1:0;	//变换Sequence！！！
+							m_nTimer=pDlg->SetTimer(1,TIMEOUT,0);	//设置定时器！！！
 						}
 					}
-					ACKFlag=false;
+					ACKFlag=false;//复位ACKFLAG!!!
 				}
-				else
+				else//没收到ACK！！！
 					if (RecvBuf[RecvPTR]==ACK) ACKFlag=true;
 				break;
-			case RECVSTATE:
-				switch (STXFlag)
+			case RECVSTATE://接收状态！！！
+				switch (STXFlag)//STXFLAG有3种情况！！！
 				{
-				case 0:
+				case 0://没收到STX！！！
 					switch (RecvBuf[RecvPTR])
 					{
-					case EOT:
-						CommState=IDLESTATE;RecvPTR=0;	//接收完成,连接断开
+					case EOT: //收到EOT 传输结束！！！
+						CommState=IDLESTATE;RecvPTR=0;	//接收完成 连接断开 回到空闲状态！！！
 						pDlg->m_ListLog.InsertString(-1,"接收：完成");
-						RecvFile.Close ();
+						RecvFile.Close ();//关闭记录接受信息的文件！！！
 						pDlg->m_ListLog.InsertString(-1,"------返回空闲状态------");
 						pDlg->KillTimer(m_nTimer);
 
-						time(&TimeFinish);	//显示统计信息
+						time(&TimeFinish);	//显示统计信息！！！
 						DiffTime=difftime(TimeFinish,TimeStart);
 						if ((ULONG (DiffTime))==0) sprintf(tempStr,"xxxxxx");	//该程序只能精确到秒
 						else
@@ -299,44 +317,83 @@ UINT ReadChar(PVOID hWnd)
 						pDlg->m_Send.EnableWindow(true);
 						pDlg->m_Setup.EnableWindow(true);
 						break;
-					case ENQ:
+					case ENQ: //ENQ 询问 传输开始！！！
 						pDlg->m_ListLog.InsertString(-1,"接收：ENQ");
-						SendBuf[0]=ACK; SendBuf[1]=Sequence; SendLen=2;	//发送确认信息
-						sprintf(DisplayStr,"发送：ACK %i",Sequence);
+						SendBuf[0]=ACK; SendBuf[1]=Sequence; SendLen=2;	//回传ACK！！！
+						sprintf(DisplayStr,"发送~~：ACK %i",Sequence);
 						SendMsg(DisplayStr);
 						break;
 					case STX:
-						STXFlag=1;
+						STXFlag=1;//收到STX了
 						break;
 					}
 					break;
-				case 1:
-					if (RecvBuf[RecvPTR]==Sequence)
+				case 1://收到STX但没收到序号！！！
+					if (RecvBuf[RecvPTR]==Sequence)//读到了序号！！！
 					{
 						STXFlag=2;
 						CRC=0;
 					}
 					else STXFlag=0;
 					break;
-				case 2:
+				case 2://收到STX&序号！！！
 					switch (RecvBuf[RecvPTR])
 					{
-					case ETX:
-						if (CRC==0)
+					case ETX://帧结束！！！
+						len = RecvPTR;
+						st = 0;
+						ed = RecvPTR - 1;//end是最后移位所在下标
+						for (i = st; i <= ed; i++)
+						{
+							lenMM++;
+							MM[lenMM] = RecvBuf[i];
+						}
+
+						QQ[1] = MM[1]; QQ[2] = MM[2]; QQ[3] = MM[3]; QQ[4] = MM[4];
+						fflag = 1;
+						for (i = 1; i <= lenMM - 3; i++)
+						{
+							QQ[4] = MM[i + 3];
+							bbit[1] = QQ[1] ^ (G[1] * fflag);
+							bbit[2] = QQ[2] ^ (G[2] * fflag);
+							bbit[3] = QQ[3] ^ (G[3] * fflag);
+							bbit[4] = QQ[4] ^ (G[4] * fflag);
+
+							fflag = bbit[2];
+							QQ[1] = bbit[2];
+							QQ[2] = bbit[3];
+							QQ[3] = bbit[4];
+							if (i + 3 == lenMM)
+								for (j = 1; j <= 3; j++)
+									RR[j] = bbit[j + 1];
+						}
+						CRC = 1;
+						for (j = 1; j <= 3; j++)
+							if (RR[j] == 1)
+								CRC = 1;
+
+						if (/*CRC==0*/0)//校验正确！！！
 						{
 							pDlg->m_ListLog.InsertString(-1,"接收：信息......");
 							RecvFile.Write(RecvBuf,RecvPTR-1);	//将接收信息存入文件
 							TextLen=TextLen+RecvPTR-1;
-							Sequence=(Sequence==0)?1:0;
-							SendBuf[0]=ACK; SendBuf[1]=Sequence; SendLen=2;
-							sprintf(DisplayStr,"发送：ACK %i",Sequence);
+							Sequence=(Sequence==0)?1:0;//更新Sequence！！！
+							SendBuf[0]=ACK; SendBuf[1]=Sequence; SendLen=2;//回传ACK！！！
+							sprintf(DisplayStr,"发送？？：ACK %i",Sequence);
 							SendMsg(DisplayStr);
 						}
-						RecvPTR=0;STXFlag=0;	//开始新的一包
+						RecvPTR=0;STXFlag=0;	//开始为新的一包做准备！！！
 						break;
-					default:
-						if (RecvPTR < BUFFER_SIZE)	CRC=CRC^RecvBuf[RecvPTR++];
-						else {RecvPTR=0;STXFlag=0;}
+					//TODO: 此处是receiver的checksum核算程序！！！
+					default://帧没结束！！！
+						if (RecvPTR < BUFFER_SIZE)
+							//CRC=CRC^RecvBuf[RecvPTR++];//奇偶校验！！！
+							CRC = 0;
+						else 
+						{
+							RecvPTR=0;
+							STXFlag=0;
+						}
 						break;
 					}
 					break;
@@ -347,23 +404,72 @@ UINT ReadChar(PVOID hWnd)
 	}
 	return 0;
 }
-void FormPacket()	//打包
+void FormPacket()	//打包 checksum的构造程序！！！
 {
-	int	len,i;	
+	/*int	len,i;
 
-	SendBuf[0]=STX;SendBuf[1]=Sequence;
+	SendBuf[0]=STX;SendBuf[1]=Sequence; //STX为正文开头
 	len=SendFile.Read(&SendBuf[2],PacketLen);	//读取数据
-	
+
 	CRC=0;	//计算校验和
 	for (i=0;i<len;i++)
 		CRC=CRC^SendBuf[i+2];
-	
+
 	SendBuf[2+len]=CRC;
-	SendBuf[2+len+1]=ETX;
+	SendBuf[2+len+1]=ETX; //ETX为正文结束
 
 	SendLen=2+1+len+1;
 	LastPacket=(len==PacketLen)?false:true;
-	TextLen=TextLen+len;
+	TextLen=TextLen+len;*/
+
+	int len, i,j;
+	SendBuf[0] = STX; SendBuf[1] = Sequence;//帧头
+	len = SendFile.Read(&SendBuf[2], PacketLen);//从发送文件中读取数据 len带0下标位长度
+	int st = 2;
+	int end = len - 1;//end是最后移位所在下标
+	int lenM = 0;
+	int M[100000];
+	for (i = st;i <= end;i++)
+	{
+		lenM++;
+		M[lenM] = SendBuf[i];
+	}
+	for (i = lenM; i <= lenM + lenR; i++)
+		M[i] = 0;
+	lenM += lenR;
+	
+	int lenQ = 4;
+	int Q[10];
+	Q[1] = M[1]; Q[2] = M[2]; Q[3] = M[3]; Q[4] = M[4];
+	int flag = 1;
+	for (i = 1; i <= lenM-3; i++)
+	{
+		int bit[10];
+		Q[4] = M[i+3];
+		bit[1] = Q[1] ^ (G[1] * flag);
+		bit[2] = Q[2] ^ (G[2] * flag);
+		bit[3] = Q[3] ^ (G[3] * flag);
+		bit[4] = Q[4] ^ (G[4] * flag);
+
+		flag = bit[2];
+		Q[1] = bit[2];
+		Q[2] = bit[3];
+		Q[3] = bit[4];
+		if (i + 3 == lenM)
+			for (j = 1; j <= 3; j++)
+			{
+				R[j] = bit[j + 1];
+				M[i + j] = R[j];
+			}
+	}
+
+	for (i = 1; i <= lenR; i++)
+		SendBuf[end+i] = M[lenM-lenR+i];
+	SendBuf[end+lenR+1] = ETX; //ETX为正文结束
+
+	SendLen = end + lenR + 1;
+	LastPacket = (len == PacketLen) ? false : true;
+	TextLen = TextLen + len; 
 }
 void SendMsg(char *DisplayStr)	//向串行口发送信息
 {

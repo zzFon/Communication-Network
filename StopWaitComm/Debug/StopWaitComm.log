@@ -1,2 +1,1 @@
-﻿SetupComm.obj : warning LNK4075: 忽略 '/EDITANDCONTINUE'，由於 '/SAFESEH' 規格
-  StopWaitComm.vcxproj -> E:\StopWaitComm\Debug\StopWaitComm.exe
+﻿  StopWaitComm.vcxproj -> E:\Communication-Network\StopWaitComm\Debug\StopWaitComm.exe
